@@ -34,6 +34,7 @@ export async function suggestCinematicEdits(
 
 const prompt = ai.definePrompt({
   name: 'suggestCinematicEditsPrompt',
+  model: 'googleai/gemini-1.5-flash-latest',
   input: {schema: SuggestCinematicEditsInputSchema},
   output: {schema: SuggestCinematicEditsOutputSchema},
   prompt: `You are a professional cinematic colorist. A user will upload an image, and you will suggest cinematic color grade presets based on the content of the image.

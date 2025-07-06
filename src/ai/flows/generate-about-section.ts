@@ -31,6 +31,7 @@ export async function generateAboutSection(input: GenerateAboutSectionInput): Pr
 
 const prompt = ai.definePrompt({
   name: 'generateAboutSectionPrompt',
+  model: 'googleai/gemini-1.5-flash-latest',
   input: {schema: GenerateAboutSectionInputSchema},
   output: {schema: GenerateAboutSectionOutputSchema},
   prompt: `You are an expert content writer specializing in creating engaging About sections for web applications.
