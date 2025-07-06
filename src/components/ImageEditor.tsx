@@ -95,6 +95,7 @@ export default function ImageEditor() {
       try {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         setOriginalImageData(imageData);
+        setEditedImage(editedCanvas.toDataURL('image/jpeg'));
       } catch(e) {
         console.error("Error getting image data:", e);
         toast({ variant: 'destructive', title: 'CORS Error', description: 'Could not process the image due to security restrictions. Try a different image.' });
@@ -141,8 +142,12 @@ export default function ImageEditor() {
         setIsProcessing(false);
       }, 0);
     } else {
-      ctx.putImageData(originalImageData, 0, 0);
-      setEditedImage(null);
+        if (originalImageData) {
+            ctx.putImageData(originalImageData, 0, 0);
+            setEditedImage(editedCanvas.toDataURL('image/jpeg'));
+        } else {
+            setEditedImage(null);
+        }
     }
   }, [selectedFilter, filterIntensity, originalImageData, filteredImageData]);
 
