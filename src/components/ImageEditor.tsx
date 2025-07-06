@@ -226,6 +226,14 @@ export default function ImageEditor() {
     handleFileChange(file);
   };
 
+  const increaseIntensity = useCallback(() => {
+    setFilterIntensity(v => Math.min(100, v + 10));
+  }, []);
+
+  const decreaseIntensity = useCallback(() => {
+    setFilterIntensity(v => Math.max(0, v - 10));
+  }, []);
+
   return (
     <div className="space-y-8 w-full">
       {!originalImage ? (
@@ -352,12 +360,12 @@ export default function ImageEditor() {
                         <span className="text-sm text-muted-foreground font-mono">{filterIntensity}%</span>
                       </div>
                       <div className="flex items-center gap-4">
-                        <Button variant="outline" size="icon" onClick={() => setFilterIntensity(v => Math.max(0, v - 10))} disabled={isProcessing || filterIntensity === 0}>
+                        <Button variant="outline" size="icon" onClick={decreaseIntensity} disabled={isProcessing || filterIntensity === 0}>
                           <Minus />
                           <span className="sr-only">Decrease Level</span>
                         </Button>
                         <Progress value={filterIntensity} className="flex-1" />
-                        <Button variant="outline" size="icon" onClick={() => setFilterIntensity(v => Math.min(100, v + 10))} disabled={isProcessing || filterIntensity === 100}>
+                        <Button variant="outline" size="icon" onClick={increaseIntensity} disabled={isProcessing || filterIntensity === 100}>
                           <Plus />
                           <span className="sr-only">Increase Level</span>
                         </Button>
