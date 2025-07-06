@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { findFilter, type Filter } from '@/lib/filters';
 import { Separator } from '@/components/ui/separator';
+import { Slider } from '@/components/ui/slider';
 
 export default function ImageEditor() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -19,11 +20,28 @@ export default function ImageEditor() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
+  const [filterIntensity, setFilterIntensity] = useState(100);
+  const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null);
+  const [filteredImageData, setFilteredImageData] = useState<ImageData | null>(null);
+
   const originalCanvasRef = useRef<HTMLCanvasElement>(null);
   const editedCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
+
+  const handleReset = useCallback(() => {
+    setOriginalImage(null);
+    setEditedImage(null);
+    setSuggestions([]);
+    setSelectedFilter(null);
+    setOriginalImageData(null);
+    setFilteredImageData(null);
+    setFilterIntensity(100);
+    if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+    }
+  }, []);
 
   const handleFileChange = (file: File | null) => {
     if (!file) return;
@@ -43,55 +61,92 @@ export default function ImageEditor() {
       setEditedImage(null);
       setSuggestions([]);
       setSelectedFilter(null);
+      setOriginalImageData(null);
+      setFilteredImageData(null);
+      setFilterIntensity(100);
     };
     reader.readAsDataURL(file);
   };
 
-  const drawImageOnCanvas = useCallback((canvas: HTMLCanvasElement | null, imageUrl: string, filter?: Filter) => {
-    const canvasEl = canvas;
-    if (!canvasEl) return;
-    const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
-    
+  const drawAndCacheOriginalImage = useCallback(() => {
+    const canvas = originalCanvasRef.current;
+    const editedCanvas = editedCanvasRef.current;
+    const imageUrl = originalImage;
+
+    if (!canvas || !editedCanvas || !imageUrl) return;
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const editedCtx = editedCanvas.getContext('2d', { willReadFrequently: true });
+
+    if (!ctx || !editedCtx) return;
+
     const img = new window.Image();
+    img.crossOrigin = "Anonymous";
     img.src = imageUrl;
     img.onload = () => {
       const maxWidth = 800;
       const scale = Math.min(maxWidth / img.width, 1);
-      canvasEl.width = img.width * scale;
-      canvasEl.height = img.height * scale;
-      ctx.drawImage(img, 0, 0, canvasEl.width, canvasEl.height);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      editedCanvas.width = canvas.width;
+      editedCanvas.height = canvas.height;
 
-      if (filter) {
-        setIsProcessing(true);
-        setTimeout(() => {
-          try {
-            let imageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height);
-            imageData = filter(imageData);
-            ctx.putImageData(imageData, 0, 0);
-            setEditedImage(canvasEl.toDataURL('image/jpeg'));
-          } catch (error) {
-            console.error("Error applying filter: ", error);
-            toast({ variant: 'destructive', title: 'Filter Error', description: 'Could not apply the selected filter.' });
-          } finally {
-            setIsProcessing(false);
-          }
-        }, 50);
-      } else {
-        setEditedImage(null);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      editedCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        setOriginalImageData(imageData);
+      } catch(e) {
+        console.error("Error getting image data:", e);
+        toast({ variant: 'destructive', title: 'CORS Error', description: 'Could not process the image due to security restrictions. Try a different image.' });
+        handleReset();
       }
     };
     img.onerror = () => {
         toast({ variant: 'destructive', title: 'Image Error', description: 'Could not load the image.' });
     }
-  }, [toast]);
+  }, [originalImage, toast, handleReset]);
 
   useEffect(() => {
     if (originalImage) {
-      drawImageOnCanvas(originalCanvasRef.current, originalImage);
-      drawImageOnCanvas(editedCanvasRef.current, originalImage);
+      drawAndCacheOriginalImage();
     }
-  }, [originalImage, drawImageOnCanvas]);
+  }, [originalImage, drawAndCacheOriginalImage]);
+
+  useEffect(() => {
+    if (!originalImageData || !editedCanvasRef.current) return;
+    
+    const editedCanvas = editedCanvasRef.current;
+    const ctx = editedCanvas.getContext('2d');
+    if (!ctx) return;
+
+    if (selectedFilter && filteredImageData) {
+      setIsProcessing(true);
+      setTimeout(() => {
+        const finalImageData = ctx.createImageData(originalImageData.width, originalImageData.height);
+        const intensity = filterIntensity / 100;
+        const negIntensity = 1 - intensity;
+        
+        const origData = originalImageData.data;
+        const filtData = filteredImageData.data;
+  
+        for (let i = 0; i < origData.length; i += 4) {
+          finalImageData.data[i] = negIntensity * origData[i] + intensity * filtData[i];
+          finalImageData.data[i+1] = negIntensity * origData[i+1] + intensity * filtData[i+1];
+          finalImageData.data[i+2] = negIntensity * origData[i+2] + intensity * filtData[i+2];
+          finalImageData.data[i+3] = origData[i+3];
+        }
+    
+        ctx.putImageData(finalImageData, 0, 0);
+        setEditedImage(editedCanvas.toDataURL('image/jpeg'));
+        setIsProcessing(false);
+      }, 0);
+    } else {
+      ctx.putImageData(originalImageData, 0, 0);
+      setEditedImage(null);
+    }
+  }, [selectedFilter, filterIntensity, originalImageData, filteredImageData]);
 
   const handleGetSuggestions = async () => {
     if (!originalImage) return;
@@ -121,34 +176,40 @@ export default function ImageEditor() {
 
   const applyFilter = (filterName: string) => {
     const filterFn = findFilter(filterName);
-    if (!filterFn || !originalImage) {
+    if (!filterFn || !originalImageData) {
       toast({
         variant: 'destructive',
         title: 'Filter Not Available',
-        description: `The filter "${filterName}" is not supported yet.`,
+        description: `The filter "${filterName}" is not supported yet or image data is missing.`,
       });
       return;
     }
+    
     setSelectedFilter(filterName);
-    drawImageOnCanvas(editedCanvasRef.current, originalImage, filterFn);
+    setFilterIntensity(100);
+
+    setTimeout(() => {
+      try {
+        const newImageData = new ImageData(
+          new Uint8ClampedArray(originalImageData.data),
+          originalImageData.width,
+          originalImageData.height
+        );
+        const filtered = filterFn(newImageData);
+        setFilteredImageData(filtered);
+      } catch (error) {
+        console.error("Error applying filter: ", error);
+        toast({ variant: 'destructive', title: 'Filter Error', description: 'Could not apply the selected filter.' });
+      }
+    }, 10);
   };
   
   const handleDownload = () => {
     if (!editedImage || !editedCanvasRef.current) return;
     const link = document.createElement('a');
-    link.download = `cinemagic-edit.jpg`;
-    link.href = editedCanvasRef.current.toDataURL('image/jpeg');
+    link.download = `cinemagic-${selectedFilter?.toLowerCase().replace(/\s/g, '-') ?? 'edit'}.jpg`;
+    link.href = editedCanvasRef.current.toDataURL('image/jpeg', 0.9);
     link.click();
-  };
-
-  const handleReset = () => {
-    setOriginalImage(null);
-    setEditedImage(null);
-    setSuggestions([]);
-    setSelectedFilter(null);
-    if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-    }
   };
   
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -237,12 +298,6 @@ export default function ImageEditor() {
                       <Upload className="mr-2 h-4 w-4" />
                       Upload New Image
                   </Button>
-                  {editedImage && selectedFilter && (
-                      <Button onClick={handleDownload}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download
-                      </Button>
-                  )}
               </div>
               
               {suggestions.length > 0 && (
@@ -255,7 +310,7 @@ export default function ImageEditor() {
                         key={s}
                         variant={selectedFilter === s ? 'default' : 'secondary'}
                         onClick={() => applyFilter(s)}
-                        disabled={!findFilter(s)}
+                        disabled={!findFilter(s) || isProcessing}
                         className="capitalize"
                       >
                         {s}
@@ -275,6 +330,29 @@ export default function ImageEditor() {
                     </div>
                   </div>
                )}
+              
+              {selectedFilter && (
+                <div className="space-y-4 pt-4">
+                  <Separator />
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-medium capitalize">{selectedFilter} Level</h4>
+                    <span className="text-sm text-muted-foreground font-mono">{filterIntensity}%</span>
+                  </div>
+                  <Slider
+                    value={[filterIntensity]}
+                    onValueChange={(value) => setFilterIntensity(value[0])}
+                    max={100}
+                    step={1}
+                    disabled={isProcessing}
+                  />
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={handleDownload} disabled={!editedImage || isProcessing}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Cinematic Edit
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
