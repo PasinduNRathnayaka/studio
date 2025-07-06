@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { findFilter, type Filter } from '@/lib/filters';
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function ImageEditor() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -19,6 +20,7 @@ export default function ImageEditor() {
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [activeTab, setActiveTab] = useState('ai');
 
   const [filterIntensity, setFilterIntensity] = useState(100);
   const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null);
@@ -38,6 +40,7 @@ export default function ImageEditor() {
     setOriginalImageData(null);
     setFilteredImageData(null);
     setFilterIntensity(100);
+    setActiveTab('ai');
     if (fileInputRef.current) {
         fileInputRef.current.value = "";
     }
@@ -57,13 +60,8 @@ export default function ImageEditor() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
+      handleReset();
       setOriginalImage(e.target?.result as string);
-      setEditedImage(null);
-      setSuggestions([]);
-      setSelectedFilter(null);
-      setOriginalImageData(null);
-      setFilteredImageData(null);
-      setFilterIntensity(100);
     };
     reader.readAsDataURL(file);
   };
@@ -197,6 +195,7 @@ export default function ImageEditor() {
         );
         const filtered = filterFn(newImageData);
         setFilteredImageData(filtered);
+        setActiveTab('adjust');
       } catch (error) {
         console.error("Error applying filter: ", error);
         toast({ variant: 'destructive', title: 'Filter Error', description: 'Could not apply the selected filter.' });
@@ -285,74 +284,88 @@ export default function ImageEditor() {
 
           <Card>
             <CardHeader>
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <CardTitle>Editing Tools</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex flex-wrap gap-4 items-center">
-                  <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0}>
-                    <Wand2 className="mr-2 h-4 w-4" />
-                    {isLoading ? 'Getting suggestions...' : 'Get AI Suggestions'}
-                    {isLoading && <RefreshCw className="ml-2 h-4 w-4 animate-spin" />}
-                  </Button>
+                <div className="flex gap-2">
                   <Button variant="outline" onClick={handleReset}>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Upload New Image
+                    <Upload />
+                    Upload New
                   </Button>
+                  <Button onClick={handleDownload} disabled={!editedImage || isProcessing}>
+                    <Download />
+                    Download Edit
+                  </Button>
+                </div>
               </div>
-              
-              {suggestions.length > 0 && (
-                <div className="space-y-4 pt-4">
-                  <Separator />
-                  <h4 className="font-medium">Suggested Looks</h4>
-                  <div className="flex flex-wrap gap-3">
-                    {suggestions.map((s) => (
-                      <Button
-                        key={s}
-                        variant={selectedFilter === s ? 'default' : 'secondary'}
-                        onClick={() => applyFilter(s)}
-                        disabled={!findFilter(s) || isProcessing}
-                        className="capitalize"
-                      >
-                        {s}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
-               {isLoading && (
-                  <div className="space-y-4 pt-4">
-                    <Separator />
-                    <h4 className="font-medium">Suggested Looks</h4>
-                    <div className="flex flex-wrap gap-3">
-                      <Skeleton className="h-10 w-24 rounded-md" />
-                      <Skeleton className="h-10 w-28 rounded-md" />
-                      <Skeleton className="h-10 w-20 rounded-md" />
-                    </div>
-                  </div>
-               )}
-              
-              {selectedFilter && (
-                <div className="space-y-4 pt-4">
-                  <Separator />
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-medium capitalize">{selectedFilter} Level</h4>
-                    <span className="text-sm text-muted-foreground font-mono">{filterIntensity}%</span>
-                  </div>
-                  <Slider
-                    value={[filterIntensity]}
-                    onValueChange={(value) => setFilterIntensity(value[0])}
-                    max={100}
-                    step={1}
-                    disabled={isProcessing}
-                  />
-                  <div className="flex justify-end pt-2">
-                    <Button onClick={handleDownload} disabled={!editedImage || isProcessing}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download Cinematic Edit
+            </CardHeader>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="ai">AI Suggestions</TabsTrigger>
+                  <TabsTrigger value="adjust" disabled={!selectedFilter}>Adjustments</TabsTrigger>
+                </TabsList>
+                <TabsContent value="ai" className="pt-6">
+                  <div className="space-y-6">
+                    <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0} className="w-full sm:w-auto">
+                      <Wand2 />
+                      {isLoading ? 'Getting suggestions...' : 'Get AI Suggestions'}
+                      {isLoading && <RefreshCw className="ml-2 h-4 w-4 animate-spin" />}
                     </Button>
+                    
+                    {suggestions.length > 0 && (
+                      <div className="space-y-4 pt-4">
+                        <Separator />
+                        <h4 className="font-medium">Suggested Looks</h4>
+                        <div className="flex flex-wrap gap-3">
+                          {suggestions.map((s) => (
+                            <Button
+                              key={s}
+                              variant={selectedFilter === s ? 'default' : 'secondary'}
+                              onClick={() => applyFilter(s)}
+                              disabled={!findFilter(s) || isProcessing}
+                              className="capitalize"
+                            >
+                              {s}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {isLoading && (
+                      <div className="space-y-4 pt-4">
+                        <Separator />
+                        <h4 className="font-medium">Suggested Looks</h4>
+                        <div className="flex flex-wrap gap-3">
+                          <Skeleton className="h-10 w-24 rounded-md" />
+                          <Skeleton className="h-10 w-28 rounded-md" />
+                          <Skeleton className="h-10 w-20 rounded-md" />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                </TabsContent>
+                <TabsContent value="adjust" className="pt-6">
+                  {selectedFilter ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium capitalize">{selectedFilter} Level</h4>
+                        <span className="text-sm text-muted-foreground font-mono">{filterIntensity}%</span>
+                      </div>
+                      <Slider
+                        value={[filterIntensity]}
+                        onValueChange={(value) => setFilterIntensity(value[0])}
+                        max={100}
+                        step={1}
+                        disabled={isProcessing}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      <p>Select an AI suggestion to make adjustments.</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </div>
