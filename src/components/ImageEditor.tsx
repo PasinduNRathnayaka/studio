@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, type ChangeEvent } from 'react';
-import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus } from 'lucide-react';
+import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCinematicSuggestions } from '@/app/(actions)/ai';
@@ -320,11 +320,17 @@ export default function ImageEditor() {
                 </TabsList>
                 <TabsContent value="ai" className="pt-6">
                   <div className="space-y-6">
-                    <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0} className="w-full sm:w-auto">
-                      <Wand2 />
-                      {isLoading ? 'Getting suggestions...' : 'Get AI Suggestions'}
-                      {isLoading && <RefreshCw className="ml-2 h-4 w-4 animate-spin" />}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0} className="flex-grow sm:flex-grow-0">
+                        <Wand2 />
+                        {isLoading ? 'Getting suggestions...' : 'Get AI Suggestions'}
+                        {isLoading && <RefreshCw className="ml-2 h-4 w-4 animate-spin" />}
+                      </Button>
+                      <Button onClick={() => applyFilter('enhance')} disabled={isProcessing} variant="outline" className="flex-grow sm:flex-grow-0">
+                        <Sparkles />
+                        Enhance Photo
+                      </Button>
+                    </div>
                     
                     {suggestions.length > 0 && (
                       <div className="space-y-4 pt-4">

@@ -71,7 +71,37 @@ const noir: Filter = (imageData) => {
     return imageData;
 };
 
+const enhance: Filter = (imageData) => {
+    const data = imageData.data;
+    const contrast = 1.1;
+    const saturation = 1.1;
+
+    for (let i = 0; i < data.length; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+
+        // Apply contrast
+        r = (r - 128) * contrast + 128;
+        g = (g - 128) * contrast + 128;
+        b = (b - 128) * contrast + 128;
+        
+        // Apply saturation
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = gray + saturation * (r - gray);
+        g = gray + saturation * (g - gray);
+        b = gray + saturation * (b - gray);
+
+        // Clamp values
+        data[i] = Math.max(0, Math.min(255, r));
+        data[i + 1] = Math.max(0, Math.min(255, g));
+        data[i + 2] = Math.max(0, Math.min(255, b));
+    }
+    return imageData;
+};
+
 export const filters: Record<string, Filter> = {
+  enhance,
   grayscale,
   sepia,
   vintage,
