@@ -114,42 +114,40 @@ export default function ImageEditor() {
   }, [originalImage, drawAndCacheOriginalImage]);
 
   useEffect(() => {
-    if (!originalImageData || !editedCanvasRef.current) return;
-    
+    if (!selectedFilter || !originalImageData || !filteredImageData || !editedCanvasRef.current) {
+      if (originalImageData && editedCanvasRef.current) {
+        const editedCanvas = editedCanvasRef.current;
+        const ctx = editedCanvas.getContext('2d');
+        if (ctx) {
+          ctx.putImageData(originalImageData, 0, 0);
+          setEditedImage(editedCanvas.toDataURL('image/jpeg'));
+        }
+      }
+      return;
+    }
+
     const editedCanvas = editedCanvasRef.current;
     const ctx = editedCanvas.getContext('2d');
     if (!ctx) return;
 
-    if (selectedFilter && filteredImageData) {
-      setIsProcessing(true);
-      setTimeout(() => {
-        const finalImageData = ctx.createImageData(originalImageData.width, originalImageData.height);
-        const intensity = filterIntensity / 100;
-        const negIntensity = 1 - intensity;
-        
-        const origData = originalImageData.data;
-        const filtData = filteredImageData.data;
-  
-        for (let i = 0; i < origData.length; i += 4) {
-          finalImageData.data[i] = negIntensity * origData[i] + intensity * filtData[i];
-          finalImageData.data[i+1] = negIntensity * origData[i+1] + intensity * filtData[i+1];
-          finalImageData.data[i+2] = negIntensity * origData[i+2] + intensity * filtData[i+2];
-          finalImageData.data[i+3] = origData[i+3];
-        }
+    const finalImageData = ctx.createImageData(originalImageData.width, originalImageData.height);
+    const intensity = filterIntensity / 100;
+    const negIntensity = 1 - intensity;
     
-        ctx.putImageData(finalImageData, 0, 0);
-        setEditedImage(editedCanvas.toDataURL('image/jpeg'));
-        setIsProcessing(false);
-      }, 0);
-    } else {
-        if (originalImageData) {
-            ctx.putImageData(originalImageData, 0, 0);
-            setEditedImage(editedCanvas.toDataURL('image/jpeg'));
-        } else {
-            setEditedImage(null);
-        }
+    const origData = originalImageData.data;
+    const filtData = filteredImageData.data;
+
+    for (let i = 0; i < origData.length; i += 4) {
+      finalImageData.data[i] = negIntensity * origData[i] + intensity * filtData[i];
+      finalImageData.data[i+1] = negIntensity * origData[i+1] + intensity * filtData[i+1];
+      finalImageData.data[i+2] = negIntensity * origData[i+2] + intensity * filtData[i+2];
+      finalImageData.data[i+3] = origData[i+3];
     }
-  }, [selectedFilter, filterIntensity, originalImageData, filteredImageData]);
+
+    ctx.putImageData(finalImageData, 0, 0);
+    setEditedImage(editedCanvas.toDataURL('image/jpeg'));
+
+  }, [filterIntensity, originalImageData, filteredImageData, selectedFilter]);
 
   const handleGetSuggestions = async () => {
     if (!originalImage) return;
@@ -180,31 +178,36 @@ export default function ImageEditor() {
   const applyFilter = (filterName: string) => {
     const filterFn = findFilter(filterName);
     if (!filterFn || !originalImageData) {
-      toast({
-        variant: 'destructive',
-        title: 'Filter Not Available',
-        description: `The filter "${filterName}" is not supported yet or image data is missing.`,
-      });
-      return;
+        toast({
+            variant: 'destructive',
+            title: 'Filter Not Available',
+            description: `The filter "${filterName}" is not supported yet or image data is missing.`,
+        });
+        return;
     }
-    
-    setSelectedFilter(filterName);
-    setFilterIntensity(100);
+
+    setIsProcessing(true);
 
     setTimeout(() => {
-      try {
-        const newImageData = new ImageData(
-          new Uint8ClampedArray(originalImageData.data),
-          originalImageData.width,
-          originalImageData.height
-        );
-        const filtered = filterFn(newImageData);
-        setFilteredImageData(filtered);
-        setActiveTab('adjust');
-      } catch (error) {
-        console.error("Error applying filter: ", error);
-        toast({ variant: 'destructive', title: 'Filter Error', description: 'Could not apply the selected filter.' });
-      }
+        try {
+            const newImageData = new ImageData(
+                new Uint8ClampedArray(originalImageData.data),
+                originalImageData.width,
+                originalImageData.height
+            );
+            const fullStrengthFilteredData = filterFn(newImageData);
+            
+            setFilteredImageData(fullStrengthFilteredData);
+            setSelectedFilter(filterName);
+            setFilterIntensity(100);
+            setActiveTab('adjust');
+
+        } catch (error) {
+            console.error("Error applying filter: ", error);
+            toast({ variant: 'destructive', title: 'Filter Error', description: 'Could not apply the selected filter.' });
+        } finally {
+            setIsProcessing(false);
+        }
     }, 10);
   };
   
@@ -284,10 +287,10 @@ export default function ImageEditor() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {isProcessing && (
+                    {(isLoading || isProcessing) && (
                       <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 rounded-lg">
                         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-                        <span className="ml-2">Applying filter...</span>
+                        <span className="ml-2">{isLoading ? 'Analyzing...' : 'Applying filter...'}</span>
                       </div>
                     )}
                     <canvas ref={editedCanvasRef} className="w-full h-auto rounded-md bg-muted" />
@@ -321,12 +324,11 @@ export default function ImageEditor() {
                 <TabsContent value="ai" className="pt-6">
                   <div className="space-y-6">
                     <div className="flex flex-wrap gap-2">
-                      <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0} className="flex-grow sm:flex-grow-0">
+                      <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0 || isProcessing} className="flex-grow sm:flex-grow-0">
                         <Wand2 />
                         {isLoading ? 'Getting suggestions...' : 'Get AI Suggestions'}
-                        {isLoading && <RefreshCw className="ml-2 h-4 w-4 animate-spin" />}
                       </Button>
-                      <Button onClick={() => applyFilter('enhance')} disabled={isProcessing} variant="outline" className="flex-grow sm:flex-grow-0">
+                      <Button onClick={() => applyFilter('enhance')} disabled={isProcessing || isLoading} variant="outline" className="flex-grow sm:flex-grow-0">
                         <Sparkles />
                         Enhance Photo
                       </Button>
@@ -351,7 +353,7 @@ export default function ImageEditor() {
                         </div>
                       </div>
                     )}
-                    {isLoading && (
+                    {isLoading && !isProcessing && (
                       <div className="space-y-4 pt-4">
                         <Separator />
                         <h4 className="font-medium">Suggested Looks</h4>
