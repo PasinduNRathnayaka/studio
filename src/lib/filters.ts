@@ -100,6 +100,98 @@ const enhance: Filter = (imageData) => {
     return imageData;
 };
 
+const facebook: Filter = (imageData) => {
+    const data = imageData.data;
+    const brightness = 1.05;
+    const saturation = 1.05;
+    const warmth = 5;
+
+    for (let i = 0; i < data.length; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+
+        r *= brightness;
+        g *= brightness;
+        b *= brightness;
+
+        r += warmth;
+        g += warmth / 2;
+
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = gray + saturation * (r - gray);
+        g = gray + saturation * (g - gray);
+        b = gray + saturation * (b - gray);
+
+        data[i] = Math.max(0, Math.min(255, r));
+        data[i + 1] = Math.max(0, Math.min(255, g));
+        data[i + 2] = Math.max(0, Math.min(255, b));
+    }
+    return imageData;
+};
+
+const instagram: Filter = (imageData) => {
+    const data = imageData.data;
+    const contrast = 1.2;
+    const fade = 20;
+    const blueTint = 10;
+
+    for (let i = 0; i < data.length; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+
+        r = (r - 128) * contrast + 128;
+        g = (g - 128) * contrast + 128;
+        b = (b - 128) * contrast + 128;
+
+        r += fade * (1 - r / 255);
+        g += fade * (1 - g / 255);
+        b += fade * (1 - b / 255);
+
+        const avg = (r + g + b) / 3;
+        if (avg < 128) {
+            b += blueTint;
+        }
+
+        data[i] = Math.max(0, Math.min(255, r));
+        data[i + 1] = Math.max(0, Math.min(255, g));
+        data[i + 2] = Math.max(0, Math.min(255, b));
+    }
+    return imageData;
+};
+
+const tiktok: Filter = (imageData) => {
+    const data = imageData.data;
+    const saturation = 1.2;
+    const brightness = 1.1;
+    const contrast = 1.1;
+
+    for (let i = 0; i < data.length; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+        
+        r *= brightness;
+        g *= brightness;
+        b *= brightness;
+
+        r = (r - 128) * contrast + 128;
+        g = (g - 128) * contrast + 128;
+        b = (b - 128) * contrast + 128;
+
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = gray + saturation * (r - gray);
+        g = gray + saturation * (g - gray);
+        b = gray + saturation * (b - gray);
+
+        data[i] = Math.max(0, Math.min(255, r));
+        data[i + 1] = Math.max(0, Math.min(255, g));
+        data[i + 2] = Math.max(0, Math.min(255, b));
+    }
+    return imageData;
+};
+
 export const filters: Record<string, Filter> = {
   enhance,
   grayscale,
@@ -107,7 +199,10 @@ export const filters: Record<string, Filter> = {
   vintage,
   cool,
   warm,
-  noir
+  noir,
+  facebook,
+  instagram,
+  tiktok,
 };
 
 export const findFilter = (name: string): Filter | null => {
