@@ -88,10 +88,8 @@ export default function ImageEditor() {
     img.crossOrigin = "Anonymous";
     img.src = imageUrl;
     img.onload = () => {
-      const maxWidth = 800;
-      const scale = Math.min(maxWidth / img.width, 1);
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
+      canvas.width = img.width;
+      canvas.height = img.height;
       editedCanvas.width = canvas.width;
       editedCanvas.height = canvas.height;
 
@@ -220,7 +218,7 @@ export default function ImageEditor() {
     if (!editedImage || !editedCanvasRef.current) return;
     const link = document.createElement('a');
     link.download = `cinemagic-${selectedFilter?.toLowerCase().replace(/\s/g, '-') ?? 'edit'}.jpg`;
-    link.href = editedCanvasRef.current.toDataURL('image/jpeg', 0.9);
+    link.href = editedCanvasRef.current.toDataURL('image/jpeg', 1.0);
     link.click();
   };
 
