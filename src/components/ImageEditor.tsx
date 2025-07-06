@@ -125,21 +125,17 @@ export default function ImageEditor() {
   }, [baseImage, drawAndCacheBaseImage]);
 
   useEffect(() => {
-    if (!selectedFilter || !originalImageData || !filteredImageData || !editedCanvasRef.current) {
-      if (originalImageData && editedCanvasRef.current) {
-        const editedCanvas = editedCanvasRef.current;
-        const ctx = editedCanvas.getContext('2d');
-        if (ctx) {
-          ctx.putImageData(originalImageData, 0, 0);
-          setEditedImage(editedCanvas.toDataURL('image/jpeg'));
-        }
-      }
-      return;
-    }
+    if (!originalImageData || !editedCanvasRef.current) return;
 
     const editedCanvas = editedCanvasRef.current;
     const ctx = editedCanvas.getContext('2d');
     if (!ctx) return;
+
+    if (!selectedFilter || !filteredImageData) {
+      ctx.putImageData(originalImageData, 0, 0);
+      setEditedImage(editedCanvas.toDataURL('image/jpeg'));
+      return;
+    }
 
     const finalImageData = ctx.createImageData(originalImageData.width, originalImageData.height);
     const intensity = filterIntensity / 100;
@@ -254,7 +250,14 @@ export default function ImageEditor() {
   }, []);
 
   const handleApplyPortrait = async () => {
-    if (!originalImage) return;
+    if (!originalImage || !originalCanvasRef.current || !editedCanvasRef.current) return;
+
+    const mainCanvas = originalCanvasRef.current;
+    const editCanvas = editedCanvasRef.current;
+    const mainCtx = mainCanvas.getContext('2d', { willReadFrequently: true });
+    const editCtx = editCanvas.getContext('2d');
+
+    if (!mainCtx || !editCtx) return;
 
     setIsProcessing(true);
     try {
@@ -263,26 +266,51 @@ export default function ImageEditor() {
         style: selectedStyle,
       });
 
-      if (result?.imageDataUri) {
-        setBaseImage(result.imageDataUri);
-        setSelectedFilter(null);
-        setFilteredImageData(null);
-        setFilterIntensity(100);
-        toast({ title: 'Portrait Effect Applied', description: 'The background has been blurred.' });
-      } else {
+      if (!result?.imageDataUri) {
         throw new Error('No image data returned from AI.');
       }
-    } catch (error) {
+
+      const newBlurredImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Could not load generated image.'));
+        img.src = result.imageDataUri;
+      });
+
+      const maxWidth = 800;
+      const scale = Math.min(maxWidth / newBlurredImage.width, 1);
+      mainCanvas.width = newBlurredImage.width * scale;
+      mainCanvas.height = newBlurredImage.height * scale;
+      editCanvas.width = mainCanvas.width;
+      editCanvas.height = mainCanvas.height;
+
+      mainCtx.drawImage(newBlurredImage, 0, 0, mainCanvas.width, mainCanvas.height);
+      editCtx.drawImage(newBlurredImage, 0, 0, editCanvas.width, editCanvas.height);
+
+      const newImageData = mainCtx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
+
+      setBaseImage(result.imageDataUri);
+      setOriginalImageData(newImageData);
+      setEditedImage(editCanvas.toDataURL('image/jpeg'));
+      setSelectedFilter(null);
+      setFilteredImageData(null);
+      setFilterIntensity(100);
+
+      toast({ title: 'Portrait Effect Applied', description: 'The background has been blurred.' });
+
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Portrait Effect Failed',
-        description: 'Could not apply the portrait effect. Please try again.',
+        description: error.message || 'Could not apply the portrait effect. Please try again.',
       });
       console.error(error);
     } finally {
       setIsProcessing(false);
     }
   };
+
 
   const getLoadingMessage = () => {
     if (isLoading) return 'Analyzing...';
