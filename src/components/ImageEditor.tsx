@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, type ChangeEvent } from 'react';
-import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCinematicSuggestions } from '@/app/(actions)/ai';
@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { findFilter, type Filter } from '@/lib/filters';
 import { Separator } from '@/components/ui/separator';
-import { Slider } from '@/components/ui/slider';
+import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function ImageEditor() {
@@ -351,13 +351,17 @@ export default function ImageEditor() {
                         <h4 className="font-medium capitalize">{selectedFilter} Level</h4>
                         <span className="text-sm text-muted-foreground font-mono">{filterIntensity}%</span>
                       </div>
-                      <Slider
-                        value={[filterIntensity]}
-                        onValueChange={(value) => setFilterIntensity(value[0])}
-                        max={100}
-                        step={1}
-                        disabled={isProcessing}
-                      />
+                      <div className="flex items-center gap-4">
+                        <Button variant="outline" size="icon" onClick={() => setFilterIntensity(v => Math.max(0, v - 10))} disabled={isProcessing || filterIntensity === 0}>
+                          <Minus />
+                          <span className="sr-only">Decrease Level</span>
+                        </Button>
+                        <Progress value={filterIntensity} className="flex-1" />
+                        <Button variant="outline" size="icon" onClick={() => setFilterIntensity(v => Math.min(100, v + 10))} disabled={isProcessing || filterIntensity === 100}>
+                          <Plus />
+                          <span className="sr-only">Increase Level</span>
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center text-muted-foreground py-8">
