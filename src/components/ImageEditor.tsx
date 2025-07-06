@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCinematicSuggestions } from '@/app/(actions)/ai';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { findFilter, type Filter } from '@/lib/filters';
+import { findFilter, type Filter, filters } from '@/lib/filters';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -313,8 +313,9 @@ export default function ImageEditor() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="ai">AI Suggestions</TabsTrigger>
+                  <TabsTrigger value="manual">Manual Filters</TabsTrigger>
                   <TabsTrigger value="adjust" disabled={!selectedFilter}>Adjustments</TabsTrigger>
                 </TabsList>
                 <TabsContent value="ai" className="pt-6">
@@ -357,6 +358,24 @@ export default function ImageEditor() {
                     )}
                   </div>
                 </TabsContent>
+                <TabsContent value="manual" className="pt-6">
+                  <div className="space-y-4">
+                    <h4 className="font-medium">All Filters</h4>
+                    <div className="flex flex-wrap gap-3">
+                      {Object.keys(filters).map((filterName) => (
+                        <Button
+                          key={filterName}
+                          variant={selectedFilter === filterName ? 'default' : 'secondary'}
+                          onClick={() => applyFilter(filterName)}
+                          disabled={isProcessing}
+                          className="capitalize"
+                        >
+                          {filterName}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </TabsContent>
                 <TabsContent value="adjust" className="pt-6">
                   {selectedFilter ? (
                     <div className="space-y-4">
@@ -378,7 +397,7 @@ export default function ImageEditor() {
                     </div>
                   ) : (
                     <div className="text-center text-muted-foreground py-8">
-                      <p>Select an AI suggestion to make adjustments.</p>
+                      <p>Select a filter to make adjustments.</p>
                     </div>
                   )}
                 </TabsContent>
