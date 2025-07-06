@@ -21,6 +21,7 @@ export default function ImageEditor() {
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState('ai');
   const [isApplyingPortrait, setIsApplyingPortrait] = useState(false);
@@ -82,6 +83,7 @@ export default function ImageEditor() {
 
     if (!ctx || !editedCtx) return;
 
+    setIsDrawing(true);
     const img = new window.Image();
     img.crossOrigin = "Anonymous";
     img.src = imageUrl;
@@ -104,10 +106,13 @@ export default function ImageEditor() {
         console.error("Error getting image data:", e);
         toast({ variant: 'destructive', title: 'CORS Error', description: 'Could not process the image due to security restrictions. Try a different image.' });
         handleReset();
+      } finally {
+        setIsDrawing(false);
       }
     };
     img.onerror = () => {
         toast({ variant: 'destructive', title: 'Image Error', description: 'Could not load the image.' });
+        setIsDrawing(false);
     }
   }, [originalImage, toast, handleReset]);
 
@@ -122,7 +127,7 @@ export default function ImageEditor() {
       if (originalImageData && editedCanvasRef.current) {
         const editedCanvas = editedCanvasRef.current;
         const ctx = editedCanvas.getContext('2d');
-        if (ctx && !isApplyingPortrait) { // Don't reset if portrait mode is being applied
+        if (ctx) {
           ctx.putImageData(originalImageData, 0, 0);
           setEditedImage(editedCanvas.toDataURL('image/jpeg'));
         }
@@ -151,7 +156,7 @@ export default function ImageEditor() {
     ctx.putImageData(finalImageData, 0, 0);
     setEditedImage(editedCanvas.toDataURL('image/jpeg'));
 
-  }, [filterIntensity, originalImageData, filteredImageData, selectedFilter, isApplyingPortrait]);
+  }, [filterIntensity, originalImageData, filteredImageData, selectedFilter]);
 
   const handleGetSuggestions = async () => {
     if (!originalImage) return;
@@ -225,34 +230,19 @@ export default function ImageEditor() {
 
   const handleApplyPortraitMode = async () => {
     if (!originalImage) return;
-
     setIsApplyingPortrait(true);
     try {
       const result = await applyPortraitModeAction({ photoDataUri: originalImage, style: portraitStyle });
-      const resultDataUrl = result.imageDataUri;
+      
+      // Reset other edits and set the new image as the base
+      setSelectedFilter(null);
+      setFilteredImageData(null);
+      setFilterIntensity(100);
+      setActiveTab('portrait');
+      
+      // This will trigger a re-draw of both canvases via useEffect
+      setOriginalImage(result.imageDataUri);
 
-      const editedCanvas = editedCanvasRef.current;
-      if (!editedCanvas) throw new Error("Canvas not found");
-      const ctx = editedCanvas.getContext('2d');
-      if (!ctx) throw new Error("Canvas context not available");
-
-      const img = new window.Image();
-      img.crossOrigin = "Anonymous";
-      img.src = resultDataUrl;
-      img.onload = () => {
-          ctx.clearRect(0, 0, editedCanvas.width, editedCanvas.height);
-          ctx.drawImage(img, 0, 0, editedCanvas.width, editedCanvas.height);
-          setEditedImage(editedCanvas.toDataURL('image/jpeg'));
-          
-          // Reset other edits
-          setSelectedFilter(null);
-          setFilteredImageData(null);
-          setFilterIntensity(100);
-          setActiveTab('portrait');
-      };
-      img.onerror = () => {
-        throw new Error("Failed to load generated image.");
-      }
     } catch (error) {
       console.error("Error applying portrait mode:", error);
       toast({ variant: 'destructive', title: 'Portrait Effect Failed', description: (error as Error).message });
@@ -283,6 +273,14 @@ export default function ImageEditor() {
   const decreaseIntensity = useCallback(() => {
     setFilterIntensity(v => Math.max(0, v - 10));
   }, []);
+
+  const getLoadingMessage = () => {
+    if (isLoading) return 'Analyzing...';
+    if (isApplyingPortrait) return 'Applying effect...';
+    if (isProcessing) return 'Applying filter...';
+    if (isDrawing) return 'Drawing image...';
+    return '';
+  }
 
   return (
     <div className="space-y-8 w-full">
@@ -329,10 +327,10 @@ export default function ImageEditor() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {(isLoading || isProcessing || isApplyingPortrait) && (
+                    {(isLoading || isProcessing || isApplyingPortrait || isDrawing) && (
                       <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 rounded-lg">
                         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-                        <span className="ml-2">{isLoading ? 'Analyzing...' : isApplyingPortrait ? 'Applying effect...' : 'Applying filter...'}</span>
+                        <span className="ml-2">{getLoadingMessage()}</span>
                       </div>
                     )}
                     <canvas ref={editedCanvasRef} className="w-full h-auto rounded-md bg-muted" />
@@ -349,7 +347,7 @@ export default function ImageEditor() {
                     <Upload />
                     Upload New
                   </Button>
-                  <Button onClick={handleDownload} disabled={!editedImage || isProcessing || isApplyingPortrait}>
+                  <Button onClick={handleDownload} disabled={!editedImage || isProcessing || isApplyingPortrait || isLoading || isDrawing}>
                     <Download />
                     Download
                   </Button>
@@ -444,7 +442,7 @@ export default function ImageEditor() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button onClick={handleApplyPortraitMode} disabled={isApplyingPortrait || isLoading || isProcessing}>
+                      <Button onClick={handleApplyPortraitMode} disabled={isApplyingPortrait || isLoading || isProcessing || isDrawing}>
                         <Camera />
                         {isApplyingPortrait ? 'Applying...' : 'Apply Portrait Effect'}
                       </Button>
