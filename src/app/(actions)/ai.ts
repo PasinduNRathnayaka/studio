@@ -20,6 +20,9 @@ export async function applyPortraitEffect(input: ApplyPortraitModeInput) {
     return result;
   } catch (error) {
     console.error('Error applying portrait effect:', error);
-    throw new Error('Failed to apply portrait effect.');
+    if (error instanceof Error) {
+        throw new Error(error.message);
+    }
+    throw new Error('Failed to apply portrait effect due to an unknown error.');
   }
 }

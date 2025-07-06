@@ -51,7 +51,7 @@ Redraw the provided image so the main subject is in sharp focus and the backgrou
         promptText += `\n\nAlso, apply the following style to the final image: ${style}.`;
     }
 
-    const { media } = await ai.generate({
+    const response = await ai.generate({
         model: 'googleai/gemini-2.0-flash-preview-image-generation',
         prompt: [
             { media: { url: photoDataUri } },
@@ -59,13 +59,34 @@ Redraw the provided image so the main subject is in sharp focus and the backgrou
         ],
         config: {
             responseModalities: ['TEXT', 'IMAGE'],
+            safetySettings: [
+              {
+                category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+                threshold: 'BLOCK_NONE',
+              },
+              {
+                category: 'HARM_CATEGORY_HATE_SPEECH',
+                threshold: 'BLOCK_NONE',
+              },
+              {
+                category: 'HARM_CATEGORY_HARASSMENT',
+                threshold: 'BLOCK_NONE',
+              },
+              {
+                category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                threshold: 'BLOCK_NONE',
+              },
+            ]
         },
     });
 
-    if (!media?.url) {
-        throw new Error('Image generation failed.');
+    if (!response.media?.url) {
+        if (response.finishReason === 'BLOCKED') {
+            throw new Error('Image generation was blocked by safety filters. Please try a different image.');
+        }
+        throw new Error('Image generation failed. The AI did not return an image.');
     }
 
-    return { imageDataUri: media.url };
+    return { imageDataUri: response.media.url };
   }
 );
