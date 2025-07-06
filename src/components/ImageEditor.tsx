@@ -1,18 +1,16 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, type ChangeEvent } from 'react';
-import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus, Sparkles, Camera } from 'lucide-react';
+import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getCinematicSuggestions, applyPortraitModeAction } from '@/app/(actions)/ai';
+import { getCinematicSuggestions } from '@/app/(actions)/ai';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { findFilter, type Filter, filters } from '@/lib/filters';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 
 export default function ImageEditor() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -25,8 +23,6 @@ export default function ImageEditor() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState('ai');
-  const [isApplyingPortrait, setIsApplyingPortrait] = useState(false);
-  const [portraitStyle, setPortraitStyle] = useState('Natural');
 
   const [filterIntensity, setFilterIntensity] = useState(100);
   const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null);
@@ -232,30 +228,6 @@ export default function ImageEditor() {
     link.click();
   };
 
-  const handleApplyPortraitMode = async () => {
-    if (!originalImage) return;
-    setIsApplyingPortrait(true);
-    try {
-      // Always apply effect to the pristine original image
-      const result = await applyPortraitModeAction({ photoDataUri: originalImage, style: portraitStyle });
-      
-      // Reset other edits
-      setSelectedFilter(null);
-      setFilteredImageData(null);
-      setFilterIntensity(100);
-      setActiveTab('portrait');
-      
-      // Set the result as the new base image. This will trigger the useEffect to redraw canvases.
-      setBaseImage(result.imageDataUri);
-
-    } catch (error) {
-      console.error("Error applying portrait mode:", error);
-      toast({ variant: 'destructive', title: 'Portrait Effect Failed', description: (error as Error).message });
-    } finally {
-      setIsApplyingPortrait(false);
-    }
-  };
-  
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(true);
@@ -281,7 +253,6 @@ export default function ImageEditor() {
 
   const getLoadingMessage = () => {
     if (isLoading) return 'Analyzing...';
-    if (isApplyingPortrait) return 'Applying effect...';
     if (isProcessing) return 'Applying filter...';
     if (isDrawing) return 'Drawing image...';
     return '';
@@ -332,7 +303,7 @@ export default function ImageEditor() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {(isLoading || isProcessing || isApplyingPortrait || isDrawing) && (
+                    {(isLoading || isProcessing || isDrawing) && (
                       <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 rounded-lg">
                         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
                         <span className="ml-2">{getLoadingMessage()}</span>
@@ -352,7 +323,7 @@ export default function ImageEditor() {
                     <Upload />
                     Upload New
                   </Button>
-                  <Button onClick={handleDownload} disabled={!editedImage || isProcessing || isApplyingPortrait || isLoading || isDrawing}>
+                  <Button onClick={handleDownload} disabled={!editedImage || isProcessing || isLoading || isDrawing}>
                     <Download />
                     Download
                   </Button>
@@ -361,20 +332,19 @@ export default function ImageEditor() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="ai">AI Suggestions</TabsTrigger>
                   <TabsTrigger value="manual">Manual Filters</TabsTrigger>
-                  <TabsTrigger value="portrait">Portrait</TabsTrigger>
                   <TabsTrigger value="adjust" disabled={!selectedFilter}>Adjustments</TabsTrigger>
                 </TabsList>
                 <TabsContent value="ai" className="pt-6">
                   <div className="space-y-6">
                     <div className="flex flex-wrap gap-2">
-                      <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0 || isProcessing || isApplyingPortrait} className="flex-grow sm:flex-grow-0">
+                      <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0 || isProcessing} className="flex-grow sm:flex-grow-0">
                         <Wand2 />
                         {isLoading ? 'Getting suggestions...' : 'Get AI Suggestions'}
                       </Button>
-                      <Button onClick={() => applyFilter('enhance')} disabled={isProcessing || isLoading || isApplyingPortrait} variant="outline" className="flex-grow sm:flex-grow-0">
+                      <Button onClick={() => applyFilter('enhance')} disabled={isProcessing || isLoading} variant="outline" className="flex-grow sm:flex-grow-0">
                         <Sparkles />
                         Enhance Photo
                       </Button>
@@ -390,7 +360,7 @@ export default function ImageEditor() {
                               key={s}
                               variant={selectedFilter === s ? 'default' : 'secondary'}
                               onClick={() => applyFilter(s)}
-                              disabled={!findFilter(s) || isProcessing || isApplyingPortrait}
+                              disabled={!findFilter(s) || isProcessing}
                               className="capitalize"
                             >
                               {s}
@@ -421,39 +391,12 @@ export default function ImageEditor() {
                           key={filterName}
                           variant={selectedFilter === filterName ? 'default' : 'secondary'}
                           onClick={() => applyFilter(filterName)}
-                          disabled={isProcessing || isApplyingPortrait}
+                          disabled={isProcessing}
                           className="capitalize"
                         >
                           {filterName}
                         </Button>
                       ))}
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="portrait" className="pt-6">
-                  <div className="space-y-6">
-                    <div className="flex items-end gap-4">
-                      <div className="grid gap-2 flex-1">
-                        <Label htmlFor="style-select">Style</Label>
-                        <Select value={portraitStyle} onValueChange={setPortraitStyle}>
-                          <SelectTrigger id="style-select" className="w-full">
-                            <SelectValue placeholder="Select a style" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Natural">Natural</SelectItem>
-                            <SelectItem value="Vivid">Vivid</SelectItem>
-                            <SelectItem value="Dramatic">Dramatic</SelectItem>
-                            <SelectItem value="Black and White">Black & White</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button onClick={handleApplyPortraitMode} disabled={isApplyingPortrait || isLoading || isProcessing || isDrawing}>
-                        <Camera />
-                        {isApplyingPortrait ? 'Applying...' : 'Apply Portrait Effect'}
-                      </Button>
-                    </div>
-                     <div className="text-sm text-muted-foreground">
-                      <p>Our AI will identify the main subject and create a beautiful, realistic background blur.</p>
                     </div>
                   </div>
                 </TabsContent>
