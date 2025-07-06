@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, type ChangeEvent } from 'react';
-import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus, Sparkles } from 'lucide-react';
+import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus, Sparkles, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getCinematicSuggestions } from '@/app/(actions)/ai';
+import { getCinematicSuggestions, applyPortraitModeAction } from '@/app/(actions)/ai';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { findFilter, type Filter, filters } from '@/lib/filters';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 export default function ImageEditor() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -21,6 +23,8 @@ export default function ImageEditor() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState('ai');
+  const [isApplyingPortrait, setIsApplyingPortrait] = useState(false);
+  const [portraitStyle, setPortraitStyle] = useState('Natural');
 
   const [filterIntensity, setFilterIntensity] = useState(100);
   const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null);
@@ -118,7 +122,7 @@ export default function ImageEditor() {
       if (originalImageData && editedCanvasRef.current) {
         const editedCanvas = editedCanvasRef.current;
         const ctx = editedCanvas.getContext('2d');
-        if (ctx) {
+        if (ctx && !isApplyingPortrait) { // Don't reset if portrait mode is being applied
           ctx.putImageData(originalImageData, 0, 0);
           setEditedImage(editedCanvas.toDataURL('image/jpeg'));
         }
@@ -147,7 +151,7 @@ export default function ImageEditor() {
     ctx.putImageData(finalImageData, 0, 0);
     setEditedImage(editedCanvas.toDataURL('image/jpeg'));
 
-  }, [filterIntensity, originalImageData, filteredImageData, selectedFilter]);
+  }, [filterIntensity, originalImageData, filteredImageData, selectedFilter, isApplyingPortrait]);
 
   const handleGetSuggestions = async () => {
     if (!originalImage) return;
@@ -218,6 +222,44 @@ export default function ImageEditor() {
     link.href = editedCanvasRef.current.toDataURL('image/jpeg', 0.9);
     link.click();
   };
+
+  const handleApplyPortraitMode = async () => {
+    if (!originalImage) return;
+
+    setIsApplyingPortrait(true);
+    try {
+      const result = await applyPortraitModeAction({ photoDataUri: originalImage, style: portraitStyle });
+      const resultDataUrl = result.imageDataUri;
+
+      const editedCanvas = editedCanvasRef.current;
+      if (!editedCanvas) throw new Error("Canvas not found");
+      const ctx = editedCanvas.getContext('2d');
+      if (!ctx) throw new Error("Canvas context not available");
+
+      const img = new window.Image();
+      img.crossOrigin = "Anonymous";
+      img.src = resultDataUrl;
+      img.onload = () => {
+          ctx.clearRect(0, 0, editedCanvas.width, editedCanvas.height);
+          ctx.drawImage(img, 0, 0, editedCanvas.width, editedCanvas.height);
+          setEditedImage(editedCanvas.toDataURL('image/jpeg'));
+          
+          // Reset other edits
+          setSelectedFilter(null);
+          setFilteredImageData(null);
+          setFilterIntensity(100);
+          setActiveTab('portrait');
+      };
+      img.onerror = () => {
+        throw new Error("Failed to load generated image.");
+      }
+    } catch (error) {
+      console.error("Error applying portrait mode:", error);
+      toast({ variant: 'destructive', title: 'Portrait Effect Failed', description: (error as Error).message });
+    } finally {
+      setIsApplyingPortrait(false);
+    }
+  };
   
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -287,10 +329,10 @@ export default function ImageEditor() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {(isLoading || isProcessing) && (
+                    {(isLoading || isProcessing || isApplyingPortrait) && (
                       <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 rounded-lg">
                         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-                        <span className="ml-2">{isLoading ? 'Analyzing...' : 'Applying filter...'}</span>
+                        <span className="ml-2">{isLoading ? 'Analyzing...' : isApplyingPortrait ? 'Applying effect...' : 'Applying filter...'}</span>
                       </div>
                     )}
                     <canvas ref={editedCanvasRef} className="w-full h-auto rounded-md bg-muted" />
@@ -307,7 +349,7 @@ export default function ImageEditor() {
                     <Upload />
                     Upload New
                   </Button>
-                  <Button onClick={handleDownload} disabled={!editedImage || isProcessing}>
+                  <Button onClick={handleDownload} disabled={!editedImage || isProcessing || isApplyingPortrait}>
                     <Download />
                     Download
                   </Button>
@@ -316,19 +358,20 @@ export default function ImageEditor() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="ai">AI Suggestions</TabsTrigger>
                   <TabsTrigger value="manual">Manual Filters</TabsTrigger>
+                  <TabsTrigger value="portrait">Portrait</TabsTrigger>
                   <TabsTrigger value="adjust" disabled={!selectedFilter}>Adjustments</TabsTrigger>
                 </TabsList>
                 <TabsContent value="ai" className="pt-6">
                   <div className="space-y-6">
                     <div className="flex flex-wrap gap-2">
-                      <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0 || isProcessing} className="flex-grow sm:flex-grow-0">
+                      <Button onClick={handleGetSuggestions} disabled={isLoading || suggestions.length > 0 || isProcessing || isApplyingPortrait} className="flex-grow sm:flex-grow-0">
                         <Wand2 />
                         {isLoading ? 'Getting suggestions...' : 'Get AI Suggestions'}
                       </Button>
-                      <Button onClick={() => applyFilter('enhance')} disabled={isProcessing || isLoading} variant="outline" className="flex-grow sm:flex-grow-0">
+                      <Button onClick={() => applyFilter('enhance')} disabled={isProcessing || isLoading || isApplyingPortrait} variant="outline" className="flex-grow sm:flex-grow-0">
                         <Sparkles />
                         Enhance Photo
                       </Button>
@@ -344,7 +387,7 @@ export default function ImageEditor() {
                               key={s}
                               variant={selectedFilter === s ? 'default' : 'secondary'}
                               onClick={() => applyFilter(s)}
-                              disabled={!findFilter(s) || isProcessing}
+                              disabled={!findFilter(s) || isProcessing || isApplyingPortrait}
                               className="capitalize"
                             >
                               {s}
@@ -375,12 +418,39 @@ export default function ImageEditor() {
                           key={filterName}
                           variant={selectedFilter === filterName ? 'default' : 'secondary'}
                           onClick={() => applyFilter(filterName)}
-                          disabled={isProcessing}
+                          disabled={isProcessing || isApplyingPortrait}
                           className="capitalize"
                         >
                           {filterName}
                         </Button>
                       ))}
+                    </div>
+                  </div>
+                </TabsContent>
+                <TabsContent value="portrait" className="pt-6">
+                  <div className="space-y-6">
+                    <div className="flex items-end gap-4">
+                      <div className="grid gap-2 flex-1">
+                        <Label htmlFor="style-select">Style</Label>
+                        <Select value={portraitStyle} onValueChange={setPortraitStyle}>
+                          <SelectTrigger id="style-select" className="w-full">
+                            <SelectValue placeholder="Select a style" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Natural">Natural</SelectItem>
+                            <SelectItem value="Vivid">Vivid</SelectItem>
+                            <SelectItem value="Dramatic">Dramatic</SelectItem>
+                            <SelectItem value="Black and White">Black & White</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button onClick={handleApplyPortraitMode} disabled={isApplyingPortrait || isLoading || isProcessing}>
+                        <Camera />
+                        {isApplyingPortrait ? 'Applying...' : 'Apply Portrait Effect'}
+                      </Button>
+                    </div>
+                     <div className="text-sm text-muted-foreground">
+                      <p>Our AI will identify the main subject and create a beautiful, realistic background blur.</p>
                     </div>
                   </div>
                 </TabsContent>
