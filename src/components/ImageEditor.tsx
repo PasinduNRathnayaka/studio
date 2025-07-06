@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, type ChangeEvent } from 'react';
-import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus, Sparkles } from 'lucide-react';
+import { Upload, Download, Wand2, RefreshCw, Image as ImageIcon, Minus, Plus, Sparkles, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getCinematicSuggestions } from '@/app/(actions)/ai';
+import { getCinematicSuggestions, applyPortraitEffect } from '@/app/(actions)/ai';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { findFilter, type Filter, filters } from '@/lib/filters';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function ImageEditor() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -23,6 +24,7 @@ export default function ImageEditor() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState('ai');
+  const [selectedStyle, setSelectedStyle] = useState<string>('Natural');
 
   const [filterIntensity, setFilterIntensity] = useState(100);
   const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null);
@@ -251,9 +253,40 @@ export default function ImageEditor() {
     setFilterIntensity(v => Math.max(0, v - 10));
   }, []);
 
+  const handleApplyPortrait = async () => {
+    if (!originalImage) return;
+
+    setIsProcessing(true);
+    try {
+      const result = await applyPortraitEffect({
+        photoDataUri: originalImage,
+        style: selectedStyle,
+      });
+
+      if (result?.imageDataUri) {
+        setBaseImage(result.imageDataUri);
+        setSelectedFilter(null);
+        setFilteredImageData(null);
+        setFilterIntensity(100);
+        toast({ title: 'Portrait Effect Applied', description: 'The background has been blurred.' });
+      } else {
+        throw new Error('No image data returned from AI.');
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Portrait Effect Failed',
+        description: 'Could not apply the portrait effect. Please try again.',
+      });
+      console.error(error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const getLoadingMessage = () => {
     if (isLoading) return 'Analyzing...';
-    if (isProcessing) return 'Applying filter...';
+    if (isProcessing) return 'Applying effect...';
     if (isDrawing) return 'Drawing image...';
     return '';
   }
@@ -332,9 +365,10 @@ export default function ImageEditor() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="ai">AI Suggestions</TabsTrigger>
                   <TabsTrigger value="manual">Manual Filters</TabsTrigger>
+                  <TabsTrigger value="portrait">Portrait</TabsTrigger>
                   <TabsTrigger value="adjust" disabled={!selectedFilter}>Adjustments</TabsTrigger>
                 </TabsList>
                 <TabsContent value="ai" className="pt-6">
@@ -397,6 +431,31 @@ export default function ImageEditor() {
                           {filterName}
                         </Button>
                       ))}
+                    </div>
+                  </div>
+                </TabsContent>
+                <TabsContent value="portrait" className="pt-6">
+                  <div className="space-y-6">
+                    <h4 className="font-medium">Portrait Effect</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Apply a realistic background blur to your image, making the subject stand out. This uses AI and may take a few moments.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4 items-center">
+                       <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+                          <SelectTrigger className="w-full sm:w-[200px]">
+                             <SelectValue placeholder="Select a style" />
+                          </SelectTrigger>
+                          <SelectContent>
+                             <SelectItem value="Natural">Natural</SelectItem>
+                             <SelectItem value="Vivid">Vivid</SelectItem>
+                             <SelectItem value="Dramatic">Dramatic</SelectItem>
+                             <SelectItem value="Black and White">Black & White</SelectItem>
+                          </SelectContent>
+                       </Select>
+                       <Button onClick={handleApplyPortrait} disabled={isLoading || isProcessing} className="w-full sm:w-auto">
+                          <Camera />
+                          Apply Portrait Effect
+                       </Button>
                     </div>
                   </div>
                 </TabsContent>

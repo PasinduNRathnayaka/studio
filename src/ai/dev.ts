@@ -5,3 +5,4 @@ config();
 
 import '@/ai/flows/suggest-cinematic-edits.ts';
 import '@/ai/flows/generate-about-section.ts';
+import '@/ai/flows/apply-portrait-mode.ts';
