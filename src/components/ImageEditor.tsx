@@ -293,7 +293,7 @@ export default function ImageEditor() {
                   </Button>
                   <Button onClick={handleDownload} disabled={!editedImage || isProcessing}>
                     <Download />
-                    Download Edit
+                    Download
                   </Button>
                 </div>
               </div>
