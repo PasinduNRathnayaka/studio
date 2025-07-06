@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 
 export default function ImageEditor() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [baseImage, setBaseImage] = useState<string | null>(null);
   const [editedImage, setEditedImage] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export default function ImageEditor() {
 
   const handleReset = useCallback(() => {
     setOriginalImage(null);
+    setBaseImage(null);
     setEditedImage(null);
     setSuggestions([]);
     setSelectedFilter(null);
@@ -66,15 +68,17 @@ export default function ImageEditor() {
     const reader = new FileReader();
     reader.onload = (e) => {
       handleReset();
-      setOriginalImage(e.target?.result as string);
+      const imageUrl = e.target?.result as string;
+      setOriginalImage(imageUrl);
+      setBaseImage(imageUrl);
     };
     reader.readAsDataURL(file);
   };
 
-  const drawAndCacheOriginalImage = useCallback(() => {
+  const drawAndCacheBaseImage = useCallback(() => {
     const canvas = originalCanvasRef.current;
     const editedCanvas = editedCanvasRef.current;
-    const imageUrl = originalImage;
+    const imageUrl = baseImage;
 
     if (!canvas || !editedCanvas || !imageUrl) return;
 
@@ -114,13 +118,13 @@ export default function ImageEditor() {
         toast({ variant: 'destructive', title: 'Image Error', description: 'Could not load the image.' });
         setIsDrawing(false);
     }
-  }, [originalImage, toast, handleReset]);
+  }, [baseImage, toast, handleReset]);
 
   useEffect(() => {
-    if (originalImage) {
-      drawAndCacheOriginalImage();
+    if (baseImage) {
+      drawAndCacheBaseImage();
     }
-  }, [originalImage, drawAndCacheOriginalImage]);
+  }, [baseImage, drawAndCacheBaseImage]);
 
   useEffect(() => {
     if (!selectedFilter || !originalImageData || !filteredImageData || !editedCanvasRef.current) {
@@ -232,16 +236,17 @@ export default function ImageEditor() {
     if (!originalImage) return;
     setIsApplyingPortrait(true);
     try {
+      // Always apply effect to the pristine original image
       const result = await applyPortraitModeAction({ photoDataUri: originalImage, style: portraitStyle });
       
-      // Reset other edits and set the new image as the base
+      // Reset other edits
       setSelectedFilter(null);
       setFilteredImageData(null);
       setFilterIntensity(100);
       setActiveTab('portrait');
       
-      // This will trigger a re-draw of both canvases via useEffect
-      setOriginalImage(result.imageDataUri);
+      // Set the result as the new base image. This will trigger the useEffect to redraw canvases.
+      setBaseImage(result.imageDataUri);
 
     } catch (error) {
       console.error("Error applying portrait mode:", error);
@@ -284,7 +289,7 @@ export default function ImageEditor() {
 
   return (
     <div className="space-y-8 w-full">
-      {!originalImage ? (
+      {!baseImage ? (
          <div
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -313,7 +318,7 @@ export default function ImageEditor() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <ImageIcon /> Original
+                        <ImageIcon /> Current Base
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
